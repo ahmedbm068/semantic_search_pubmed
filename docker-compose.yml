@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  backend:
+    build: .
+    container_name: nlp_backend
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    volumes:
+      - ./src:/app/src
+      - ~/.cache/huggingface:/home/appuser/.cache/huggingface
+    restart: unless-stopped
+
+  frontend:
+    image: nginx:alpine
+    container_name: nlp_frontend
+    volumes:
+      - ./src/frontend:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: nlp_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  tests:
+    build: .
+    container_name: nlp_tests
+    command: pytest -q
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+    volumes:
+      - ./src:/app/src
+    depends_on:
+      - backend
+    profiles: ["ci"]

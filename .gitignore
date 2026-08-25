@@ -1,0 +1,52 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+
+# ---- Virtualenvs ----
+venv/
+.venv/
+.venv311/
+env/
+
+# ---- Secrets ----
+.env
+.env.local
+*.pem
+*.key
+
+# ---- Node ----
+node_modules/
+src/frontend/dist/
+
+# ---- Large artifacts (regenerate with scripts/) ----
+models/
+checkpoints/
+data/cache/
+data/processed/
+data/raw/
+data/scraped/
+
+# ---- Databases ----
+*.db
+*.sqlite
+*.sqlite3
+
+# ---- Logs ----
+logs/
+*.log
+
+# ---- Editors / OS ----
+.vs/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Junk ----
+folders.txt
+structure.txt

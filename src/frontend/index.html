@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PubMed Semantic Search</title>
+
+    <meta name="color-scheme" content="light dark">
+    <meta id="themeColor" name="theme-color" content="#ffffff">
+
+    <script>
+        (function () {
+            try {
+                const raw = localStorage.getItem('uiPrefsV1');
+                const saved = raw ? JSON.parse(raw).theme : null;
+                const sys = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                if ((saved || sys) === 'dark') document.documentElement.classList.add('dark');
+            } catch { }
+        })();
+        window.tailwind = window.tailwind || {};
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { colors: { brand: '#6D28D9' } } }
+        };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        html {
+            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            border-radius: 1rem;
+            padding: .6rem 1rem;
+            font-weight: 600
+        }
+
+        .btn-primary {
+            background: #6D28D9;
+            color: #fff
+        }
+
+        .btn-primary:hover {
+            filter: brightness(.92)
+        }
+
+        .btn-ghost {
+            background: transparent
+        }
+
+        .btn-ghost:hover {
+            background: rgba(0, 0, 0, .06)
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 9999px;
+            background: #f3f4f6;
+            padding: .2rem .55rem;
+            font-size: .75rem
+        }
+
+        .card {
+            border-radius: 1rem;
+            border: 1px solid rgba(0, 0, 0, .06);
+            background: rgba(255, 255, 255, .92);
+            backdrop-filter: blur(6px)
+        }
+
+        .input {
+            width: 100%;
+            border-radius: 1rem;
+            border: 1px solid rgba(0, 0, 0, .15);
+            padding: .7rem 1rem
+        }
+
+        .input:focus {
+            box-shadow: 0 0 0 3px rgba(109, 40, 217, .25);
+            outline: none
+        }
+
+        .skeleton {
+            background: linear-gradient(90deg, #efefef, #e5e5e5, #efefef);
+            background-size: 200% 100%;
+            animation: shimmer 1.1s infinite
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: 200% 0
+            }
+
+            100% {
+                background-position: -200% 0
+            }
+        }
+
+        .line-clamp-3 {
+            -webkit-line-clamp: 3;
+            line-clamp: 3;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            overflow: hidden
+        }
+
+        .dark .btn-ghost:hover {
+            background: rgba(255, 255, 255, .08)
+        }
+
+        .dark .chip {
+            background: rgba(255, 255, 255, .08);
+            color: #e5e7eb
+        }
+
+        .dark .card {
+            border-color: rgba(255, 255, 255, .12);
+            background: rgba(255, 255, 255, .05)
+        }
+
+        .dark .input {
+            border-color: rgba(255, 255, 255, .15);
+            background: rgba(255, 255, 255, .06);
+            color: #fff
+        }
+
+        .bg-grid {
+            background-image: radial-gradient(rgba(0, 0, 0, .05) 1px, transparent 1px);
+            background-size: 16px 16px
+        }
+
+        .dark .bg-grid {
+            background-image: radial-gradient(rgba(255, 255, 255, .08) 1px, transparent 1px)
+        }
+    </style>
+</head>
+
+<body
+    class="h-full bg-gradient-to-b from-white to-gray-50 dark:from-black dark:to-gray-900 text-gray-900 dark:text-white">
+    <div class="min-h-full bg-grid">
+        <header
+            class="sticky top-0 z-30 border-b border-gray-200/70 dark:border-white/10 bg-white/70 dark:bg-black/40 backdrop-blur">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 flex items-center gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="h-8 w-8 rounded-xl bg-gradient-to-br from-brand to-fuchsia-600 shadow"></div>
+                    <h1 class="text-lg sm:text-xl font-bold">PubMed Semantic Search</h1>
+                    <span class="hidden sm:inline chip">FAISS + Fine-tuned SBERT</span>
+                </div>
+                <div class="ml-auto flex items-center gap-2">
+                    <button id="darkToggle" class="btn btn-ghost" title="Toggle theme" aria-label="Toggle theme">
+                        <span id="themeIcon">🌙</span>
+                    </button>
+                    <a class="btn btn-ghost" id="docsLink" href="/docs" target="_blank" rel="noopener">API Docs</a>
+                    <button class="btn btn-ghost" id="shareBtn" title="Copy sharable URL">Share</button>
+                    <button class="btn btn-primary" id="exportBtn">Export JSON</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+            <section class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <div class="lg:col-span-3 card p-4 sm:p-6">
+                    <div class="flex flex-col gap-3">
+                        <label class="text-xs font-bold tracking-wide uppercase opacity-70">Query</label>
+                        <div class="flex flex-col gap-2">
+                            <div class="flex flex-wrap items-center gap-3">
+                                <input id="q" class="input flex-1"
+                                    placeholder="e.g., causes of congestive heart failure, PARADIGM-HF outcomes…" />
+                                <div class="relative">
+                                    <button id="aiAssistBtn" class="btn btn-ghost"
+                                        title="Assistant de rédaction">🪶</button>
+                                    <div id="toneMenu" class="hidden absolute right-0 mt-2 w-44 card p-2 text-sm">
+                                        <button data-tone="default"
+                                            class="w-full text-left btn btn-ghost">Correction</button>
+                                        <button data-tone="scientifique"
+                                            class="w-full text-left btn btn-ghost">Scientifique</button>
+                                        <button data-tone="formel"
+                                            class="w-full text-left btn btn-ghost">Formel</button>
+                                        <button data-tone="convaincant"
+                                            class="w-full text-left btn btn-ghost">Convaincant</button>
+                                    </div>
+                                </div>
+                                <button id="searchBtn" class="btn btn-primary whitespace-nowrap">
+                                    Fast search (PubMed)
+                                </button>
+                                <button id="liveSearchBtn"
+                                    class="btn whitespace-nowrap bg-emerald-600 text-white hover:brightness-95">
+                                    Live search (NHS)
+                                </button>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 text-xs opacity-80">
+                                <span class="chip">Enter ↵</span>
+                                <span class="chip">Ctrl/Cmd + K focus</span>
+                                <span class="chip">Ctrl/Cmd + H history</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <aside class="card p-4 sm:p-6">
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <label class="text-xs font-bold uppercase opacity-70">Top-K</label>
+                                <span id="topKVal" class="chip">10</span>
+                            </div>
+                            <input id="topK" type="range" min="3" max="50" value="10" class="w-full">
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <label class="text-xs font-bold uppercase opacity-70">Min Score</label>
+                                <span id="minScoreVal" class="chip">0.00</span>
+                            </div>
+                            <input id="minScore" type="range" min="0" max="1" step="0.01" value="0" class="w-full">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold uppercase opacity-70">Endpoint</label>
+                            <input id="endpoint" class="input" value="/v1/search">
+                            <p class="mt-1 text-xs opacity-70">POST { query, k, min_score }</p>
+                        </div>
+                    </div>
+                </aside>
+            </section>
+
+            <section class="mt-6 card p-4 sm:p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold">Results</h2>
+                    <div class="flex items-center gap-2 text-sm">
+                        <span id="status" class="chip">Idle</span>
+                        <span id="resultCount" class="chip">0</span>
+                        <button id="clearBtn" class="btn btn-ghost">Clear</button>
+                        <button id="historyBtn" class="btn btn-ghost">History</button>
+                    </div>
+                </div>
+
+                <h3 class="text-base font-semibold mb-2">Fast results (PubMed)</h3>
+                <div id="results" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                <div id="pager" class="mt-6 hidden">
+                    <div class="flex justify-center gap-3">
+                        <button id="prevBtn" class="btn btn-ghost">Prev</button>
+                        <button id="nextBtn" class="btn btn-ghost">Next</button>
+                    </div>
+                </div>
+                <div id="empty" class="hidden text-sm opacity-80">
+                    No results. Try a broader query or lower <b>Min Score</b>.
+                </div>
+
+                <h3 class="text-base font-semibold mt-8 mb-2">Live result (NHS)</h3>
+                <div id="liveResult" class="space-y-3"></div>
+            </section>
+        </main>
+    </div>
+
+    <template id="cardTpl">
+        <article class="card p-4 flex flex-col gap-3">
+            <div class="flex items-start gap-3">
+                <div
+                    class="h-10 w-10 rounded-xl bg-gray-200 dark:bg-white/10 flex items-center justify-center text-xs font-bold">
+                    PM
+                </div>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                        <h3 class="truncate font-semibold" data-title></h3>
+                        <span class="chip" data-score></span>
+                    </div>
+                    <div class="text-xs opacity-70" data-meta></div>
+                </div>
+                <div class="flex items-center gap-2 ml-auto">
+                    <button class="btn btn-ghost text-xs" data-copy>Copy</button>
+                    <a class="btn btn-ghost text-xs pointer-events-none opacity-50" target="_blank" rel="noopener"
+                        data-link>Open</a>
+                </div>
+            </div>
+            <p class="text-sm leading-6 line-clamp-3" data-snippet></p>
+            <div class="flex items-center gap-2 text-xs">
+                <span class="chip" data-id></span>
+                <span class="chip" data-source></span>
+                <span class="chip" data-year></span>
+            </div>
+            <button class="btn btn-primary self-start" data-readmore>Read more</button>
+        </article>
+    </template>
+
+    <dialog id="modal" class="backdrop:bg-black/50 rounded-2xl w-[min(900px,92vw)] p-0">
+        <div class="card p-6">
+            <div class="flex items-center gap-3 mb-3">
+                <h3 id="modalTitle" class="text-lg font-semibold"></h3>
+                <span id="modalScore" class="chip"></span>
+                <button id="modalClose" class="btn btn-ghost ml-auto">Close</button>
+            </div>
+            <pre id="modalBody" class="whitespace-pre-wrap text-sm leading-7"></pre>
+        </div>
+    </dialog>
+
+    <div id="historyBackdrop" class="fixed inset-0 bg-black/40 hidden"></div>
+    <aside id="historyPanel"
+        class="fixed inset-y-0 left-0 w-80 max-w-[90vw] bg-white dark:bg-black border-r border-gray-200/70 dark:border-white/10 shadow-xl -translate-x-full transition-transform duration-200 z-40 flex flex-col">
+        <div class="p-4 border-b border-gray-200/70 dark:border-white/10 flex items-center gap-2">
+            <h3 class="text-base font-semibold">Search History</h3>
+            <button id="historyClose" class="btn btn-ghost ml-auto">Close</button>
+        </div>
+        <div class="p-4 flex items-center gap-2">
+            <input id="historySearch" class="input" placeholder="Filter history…" />
+            <button id="historyClear" class="btn btn-ghost">Clear</button>
+        </div>
+        <div id="historyList" class="px-2 pb-6 overflow-y-auto flex-1"></div>
+        <div class="p-3 text-xs opacity-70 border-t border-gray-200/70 dark:border-white/10">
+            Tip: Ctrl/Cmd + H toggles history
+        </div>
+    </aside>
+
+    <script>
+        const qs = (s, r = document) => r.querySelector(s);
+        const qsa = (s, r = document) => Array.from(r.querySelectorAll(s));
+        const PREF_KEY = 'uiPrefsV1';
+        const HIST_KEY = 'searchHistoryV1';
+        const state = { page: 0, pageSize: 10, data: [], query: '', params: { k: 10, min_score: 0 } };
+        const API_BASE = location.port === '8000' ? '' : 'http://localhost:8000';
+        let liveResult = null;
+
+        const DEV_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ5b3VAZXhhbXBsZS5jb20iLCJleHAiOjE3NjIzNDIwNzV9.wNBvKqndwFIr849ou7MvUIvD_JIqb1_jNbch2DFBH9Q";
+        localStorage.setItem("access_token", DEV_TOKEN);
+
+        function authHeaders() {
+            const token = localStorage.getItem("access_token");
+            const headers = { "Content-Type": "application/json" };
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+            return headers;
+        }
+
+        const setThemeColor = () => {
+            document.getElementById('themeColor')
+                .setAttribute('content', document.documentElement.classList.contains('dark') ? '#0a0a0a' : '#ffffff');
+        };
+        new MutationObserver(setThemeColor)
+            .observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        setThemeColor();
+
+        function savePrefs() {
+            localStorage.setItem(
+                PREF_KEY,
+                JSON.stringify({
+                    k: state.params.k,
+                    min_score: state.params.min_score,
+                    theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+                })
+            );
+        }
+        function loadPrefs() {
+            try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); } catch { return {}; }
+        }
+        function setDark(init) {
+            const saved = loadPrefs().theme;
+            const sys = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            const mode = init ? (saved || sys) :
+                (document.documentElement.classList.contains('dark') ? 'light' : 'dark');
+            document.documentElement.classList.toggle('dark', mode === 'dark');
+            qs('#themeIcon').textContent = mode === 'dark' ? '🌞' : '🌙';
+            savePrefs();
+        }
+
+        function fmtScore(s) {
+            if (s == null) return '';
+            const n = Number(s);
+            if (Number.isNaN(n)) return String(s);
+            const boosted = n + 0.3;       // add 0.3 to every score (visual only)
+            return boosted.toFixed(3);
+        }
+
+        function highlight(text, query) {
+            if (!text || !query) return text || '';
+            try {
+                const terms = [...new Set(query.toLowerCase().split(/\s+/).filter(Boolean))];
+                const rx = new RegExp(
+                    '(' + terms.map(t => t.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')).join('|') + ')',
+                    'ig'
+                );
+                return text.replace(rx, '<mark class="bg-yellow-200 px-1 rounded">$1</mark>');
+            } catch {
+                return text;
+            }
+        }
+        function mapItem(item) {
+            const text = item.text ?? item.chunk ?? item.content ?? '';
+            const meta = item.meta ?? {};
+            const title = item.title ?? meta.title ?? meta.article_title ?? meta.paper_title ?? 'score';
+            const score = item.score ?? item.similarity ?? item.distance ?? null;
+            const pmid = meta.pmid ?? meta.PMID ?? null;
+            const url = item.url ?? meta.url ?? (pmid ? `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` : null);
+            const id = item.id ?? pmid ?? meta.doi ?? '';
+            const source = item.source ?? meta.journal ?? meta.source ?? '';
+            const year = item.year ?? meta.year ?? (meta.date ? String(meta.date).slice(0, 4) : '');
+            return { text, title, score, url, id, source, year };
+        }
+        function setStatus(s) { qs('#status').textContent = s; }
+        function showEmpty(b) { qs('#empty').classList.toggle('hidden', !b); }
+        function skeletonCards(n = 4) {
+            const m = qs('#results');
+            m.innerHTML = '';
+            for (let i = 0; i < n; i++) {
+                const d = document.createElement('div');
+                d.className = 'card p-4 skeleton h-32 rounded-xl';
+                m.appendChild(d);
+            }
+        }
+        function renderPage() {
+            const start = state.page * state.pageSize;
+            const end = start + state.pageSize;
+            const items = state.data.slice(start, end);
+            const m = qs('#results');
+            m.innerHTML = '';
+            items.forEach(raw => {
+                const d = mapItem(raw);
+                const node = qs('#cardTpl').content.cloneNode(true);
+                qs('[data-title]', node).textContent = d.title;
+                qs('[data-score]', node).textContent = d.score != null ? fmtScore(d.score) : '';
+                qs('[data-meta]', node).textContent = [d.source, d.year].filter(Boolean).join(' • ');
+                qs('[data-snippet]', node).innerHTML = highlight(d.text.slice(0, 600), state.query);
+                qs('[data-id]', node).textContent = d.id ? `ID: ${d.id}` : '';
+                qs('[data-source]', node).textContent = d.source ? `Source: ${d.source}` : '';
+                qs('[data-year]', node).textContent = d.year ? `Year: ${d.year}` : '';
+                const a = qs('[data-link]', node);
+                if (d.url) {
+                    a.href = d.url;
+                    a.classList.remove('pointer-events-none', 'opacity-50');
+                } else {
+                    a.href = '#';
+                    a.classList.add('pointer-events-none', 'opacity-50');
+                }
+                qs('[data-copy]', node).addEventListener('click', () => navigator.clipboard.writeText(d.text));
+                qs('[data-readmore]', node).addEventListener('click', () => openModal(d));
+                m.appendChild(node);
+            });
+            qs('#resultCount').textContent = String(state.data.length);
+            qs('#pager').classList.toggle('hidden', state.data.length <= state.pageSize);
+            showEmpty(state.data.length === 0);
+        }
+        function openModal(d) {
+            qs('#modalTitle').textContent = d.title;
+            qs('#modalScore').textContent = d.score != null ? fmtScore(d.score) : '';
+            qs('#modalBody').innerHTML = highlight(d.text, state.query);
+            qs('#modal').showModal();
+        }
+
+        async function search() {
+            const qInput = qs('#q');
+            const query = (qInput.value || '').trim();
+            if (!query) {
+                alert('Enter a query first.');
+                return;
+            }
+            state.query = query;
+
+            const raw = qs('#endpoint').value || '/v1/search';
+            const endpoint = raw.startsWith('http') ? raw : `${API_BASE}${raw}`;
+            const body = { query: state.query, k: state.params.k, min_score: state.params.min_score };
+            setStatus('Searching…');
+            skeletonCards();
+            try {
+                const r = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify(body)
+                });
+                if (!r.ok) throw new Error(await r.text());
+                const json = await r.json();
+                const arr = Array.isArray(json) ? json : (json.results ?? json.hits ?? json.data ?? []);
+                state.data = arr;
+                state.page = 0;
+                renderPage();
+                setStatus(`Top ${state.params.k} for “${state.query}”`);
+                pushHistory(state.query);
+                updateURL();
+            } catch (e) {
+                setStatus('Error');
+                alert('Search error: ' + e.message);
+            }
+        }
+
+        async function liveSearch() {
+            const qInput = qs('#q');
+            const query = (qInput.value || '').trim();
+            if (!query) {
+                alert('Enter a query first.');
+                return;
+            }
+
+            state.query = query;
+
+            setStatus('NHS live…');
+            skeletonCards();
+            if (!liveResult) liveResult = qs('#liveResult');
+            liveResult.innerHTML = '<div class="card p-4 skeleton h-24 rounded-xl"></div>';
+
+            try {
+                const url = `${API_BASE}/v1/nhs/search?q=${encodeURIComponent(query)}&query=${encodeURIComponent(query)}&k=${state.params.k}`;
+                const r = await fetch(url, {
+                    method: 'GET',
+                    headers: authHeaders()
+                });
+                if (!r.ok) throw new Error(await r.text());
+
+                const results = await r.json();
+
+                if (!Array.isArray(results) || results.length === 0) {
+                    state.data = [];
+                    renderPage();
+                    renderLiveResultFromItem(null);
+                    setStatus('No NHS results');
+                    return;
+                }
+
+                state.data = results;
+                state.page = 0;
+                renderPage();
+
+                renderLiveResultFromItem(results[0]);
+
+                pushHistory(state.query);
+                updateURL();
+
+                setStatus(
+                    `Top ${Math.min(state.params.k, results.length)} NHS live for “${state.query}”`
+                );
+            } catch (e) {
+                console.error(e);
+                setStatus('Error');
+                if (liveResult) {
+                    liveResult.innerHTML =
+                        '<div class="text-sm text-red-500">NHS live error: ' + e.message + '</div>';
+                }
+            }
+        }
+
+        function renderLiveResultFromItem(item) {
+            if (!liveResult) liveResult = qs('#liveResult');
+
+            if (!item) {
+                liveResult.innerHTML =
+                    "<div class='text-sm opacity-80'>No NHS article found.</div>";
+                return;
+            }
+
+            const meta = item.meta || {};
+            const title = item.title || meta.title || 'NHS article';
+            const url = item.url || meta.url || '';
+            const body = item.text || '';
+
+            liveResult.innerHTML = `
+                <article class="card p-4 flex flex-col gap-3">
+                    <div class="flex items-start gap-3">
+                        <div class="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 flex items-center justify-center text-xs font-bold">
+                            NHS
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2">
+                                <h3 class="font-semibold truncate">${title}</h3>
+                                <span class="chip">Live</span>
+                            </div>
+                            ${url
+                    ? `<a href="${url}" target="_blank" rel="noopener"
+                                           class="text-xs text-blue-600 dark:text-blue-400 underline break-all">
+                                           ${url}
+                                       </a>`
+                    : ''
+                }
+                        </div>
+                    </div>
+                    <p class="text-sm leading-6 whitespace-pre-line">
+                        ${highlight(body.slice(0, 1200), state.query)}
+                    </p>
+                </article>
+            `;
+        }
+
+        function debounce(fn, t = 400) {
+            let id;
+            return (...a) => {
+                clearTimeout(id);
+                id = setTimeout(() => fn(...a), t);
+            };
+        }
+        function loadHistory() {
+            try { return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); } catch { return []; }
+        }
+        function saveHistory(arr) { localStorage.setItem(HIST_KEY, JSON.stringify(arr)); }
+        function pushHistory(q) {
+            const text = (q || '').trim();
+            if (!text) return;
+            const now = Date.now();
+            let h = loadHistory();
+            h = [{ id: now, text, ts: now }, ...h.filter(i => i.text.toLowerCase() !== text.toLowerCase())]
+                .slice(0, 200);
+            saveHistory(h);
+            renderHistory('');
+        }
+        function renderHistory(filter) {
+            const m = qs('#historyList');
+            if (!m) return;
+            const f = (filter || '').toLowerCase();
+            const items = loadHistory().filter(i => !f || i.text.toLowerCase().includes(f));
+            m.innerHTML = '';
+            if (items.length === 0) {
+                m.innerHTML = '<div class="px-3 text-sm opacity-70">No history.</div>';
+                return;
+            }
+            items.forEach(i => {
+                const row = document.createElement('div');
+                row.className =
+                    'group flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-gray-100 dark:hover:bg.white/10 cursor-pointer';
+                row.innerHTML = `
+                    <div class="flex-1 min-w-0">
+                        <div class="truncate text-sm font-medium">${i.text}</div>
+                        <div class="text-[11px] opacity-70">${new Date(i.ts).toLocaleString()}</div>
+                    </div>
+                    <button class="btn btn-ghost text-xs opacity-0 group-hover:opacity-100" data-del>Delete</button>
+                `;
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('[data-del]')) return;
+                    qs('#q').value = i.text;
+                    const ev = new Event('input', { bubbles: true });
+                    qs('#q').dispatchEvent(ev);
+                    toggleHistory(false);
+                    search();
+                });
+                row.querySelector('[data-del]').addEventListener('click', () => {
+                    saveHistory(loadHistory().filter(x => x.id !== i.id));
+                    renderHistory(filter);
+                });
+                m.appendChild(row);
+            });
+        }
+        function toggleHistory(open) {
+            const panel = qs('#historyPanel');
+            const back = qs('#historyBackdrop');
+            const willOpen = open != null ? open : panel.classList.contains('-translate-x-full');
+            panel.classList.toggle('-translate-x-full', !willOpen);
+            back.classList.toggle('hidden', !willOpen);
+        }
+        function updateURL() {
+            try {
+                const url = new URL(location.href);
+                url.searchParams.set('q', state.query);
+                url.searchParams.set('k', String(state.params.k));
+                url.searchParams.set('min', String(state.params.min_score));
+                history.replaceState({}, '', url);
+            } catch { }
+        }
+
+        async function rewriteWithTone(tone) {
+            const text = qs('#q').value.trim();
+            if (!text) return alert('Entrez un texte à corriger.');
+            setStatus('Correction en cours…');
+            try {
+                const r = await fetch(`${API_BASE}/v1/rewrite`, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ text, tone })
+                });
+                if (!r.ok) throw new Error(await r.text());
+                const data = await r.json();
+                qs('#q').value = data.corrected || text;
+                setStatus('Texte corrigé ✨');
+            } catch (e) {
+                setStatus('Erreur');
+                alert('Rewrite error: ' + e.message);
+            }
+        }
+
+        addEventListener('DOMContentLoaded', () => {
+            liveResult = qs('#liveResult');
+
+            setDark(true);
+            const prefs = loadPrefs();
+            if (prefs.k) {
+                state.params.k = prefs.k;
+                qs('#topK').value = prefs.k;
+                qs('#topKVal').textContent = prefs.k;
+            }
+            if (prefs.min_score != null) {
+                state.params.min_score = Number(prefs.min_score) || 0;
+                qs('#minScore').value = state.params.min_score;
+                qs('#minScoreVal').textContent = state.params.min_score.toFixed(2);
+            }
+
+            const u = new URL(location.href);
+            const uq = u.searchParams.get('q');
+            const uk = u.searchParams.get('k');
+            const um = u.searchParams.get('min');
+            if (uq) { qs('#q').value = uq; state.query = uq; }
+            if (uk) {
+                state.params.k = Number(uk) || state.params.k;
+                qs('#topK').value = state.params.k;
+                qs('#topKVal').textContent = state.params.k;
+            }
+            if (um) {
+                state.params.min_score = Number(um) || 0;
+                qs('#minScore').value = state.params.min_score;
+                qs('#minScoreVal').textContent = state.params.min_score.toFixed(2);
+            }
+
+            const endpointInput = qs('#endpoint');
+            if (endpointInput.value.startsWith('/')) {
+                endpointInput.value = `${API_BASE}${endpointInput.value}`;
+            }
+            const docs = qs('#docsLink');
+            docs.href = API_BASE ? `${API_BASE}/docs` : '/docs';
+
+            qs('#darkToggle').addEventListener('click', () => { setDark(false); });
+            qs('#searchBtn').addEventListener('click', search);
+            qs('#liveSearchBtn').addEventListener('click', liveSearch);
+            qs('#clearBtn').addEventListener('click', () => {
+                state.data = [];
+                renderPage();
+                if (liveResult) liveResult.innerHTML = '';
+                setStatus('Idle');
+            });
+            qs('#prevBtn').addEventListener('click', () => {
+                if (state.page > 0) { state.page--; renderPage(); }
+            });
+            qs('#nextBtn').addEventListener('click', () => {
+                if ((state.page + 1) * state.pageSize < state.data.length) {
+                    state.page++;
+                    renderPage();
+                }
+            });
+            qs('#modalClose').addEventListener('click', () => qs('#modal').close());
+            addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                    e.preventDefault(); qs('#q').focus();
+                }
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
+                    e.preventDefault(); toggleHistory();
+                }
+                if (e.key === 'Escape') {
+                    const m = qs('#modal');
+                    if (m.open) m.close();
+                }
+                if (e.key === 'Enter' && document.activeElement === qs('#q')) {
+                    e.preventDefault();
+                    search();
+                }
+            });
+            const onInput = (e) => { state.query = e.target.value; };
+            qs('#q').addEventListener('input', onInput);
+            qs('#topK').addEventListener('input', e => {
+                state.params.k = Number(e.target.value);
+                qs('#topKVal').textContent = String(state.params.k);
+                savePrefs();
+            });
+            qs('#minScore').addEventListener('input', e => {
+                state.params.min_score = Number(e.target.value);
+                qs('#minScoreVal').textContent = state.params.min_score.toFixed(2);
+                savePrefs();
+            });
+            qs('#historyBtn').addEventListener('click', () => toggleHistory());
+            qs('#historyClose').addEventListener('click', () => toggleHistory(false));
+            qs('#historyBackdrop').addEventListener('click', () => toggleHistory(false));
+            qs('#historySearch').addEventListener('input', e => renderHistory(e.target.value));
+            qs('#shareBtn').addEventListener('click', async () => {
+                updateURL();
+                await navigator.clipboard.writeText(location.href);
+                setStatus('Link copied');
+            });
+            const toneMenu = qs('#toneMenu');
+            qs('#aiAssistBtn').addEventListener('click', () => { toneMenu.classList.toggle('hidden'); });
+            toneMenu.querySelectorAll('button[data-tone]').forEach(b =>
+                b.addEventListener('click', e => {
+                    toneMenu.classList.add('hidden');
+                    rewriteWithTone(e.currentTarget.getAttribute('data-tone'));
+                })
+            );
+            addEventListener('click', (e) => {
+                if (!e.target.closest('#toneMenu') && !e.target.closest('#aiAssistBtn')) {
+                    toneMenu.classList.add('hidden');
+                }
+            });
+
+            qs('#historyClear').addEventListener('click', () => {
+                saveHistory([]);
+                renderHistory('');
+            });
+
+            renderHistory('');
+            if (state.query) search();
+            setStatus('Idle');
+        });
+
+        qs('#exportBtn')?.addEventListener('click', () => {
+            const blob = new Blob(
+                [JSON.stringify({ query: state.query, params: state.params, results: state.data }, null, 2)],
+                { type: 'application/json' }
+            );
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'semantic_results.json';
+            document.body.appendChild(a);
+            a.click();
+            URL.revokeObjectURL(url);
+            a.remove();
+        });
+    </script>
+</body>
+
+</html>
