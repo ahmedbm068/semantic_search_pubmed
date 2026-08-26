@@ -1,6 +1,6 @@
-from typing import Optional, Dict, List, Any
-from urllib.parse import quote_plus, urlparse, parse_qs, unquote
 import re
+from typing import Any
+from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -13,7 +13,7 @@ HEADERS = {
 TIMEOUT = 10
 
 
-def _normalize(text: str) -> List[str]:
+def _normalize(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", text.lower())
 
 
@@ -25,7 +25,7 @@ def _overlap_score(query: str, text: str) -> float:
     return len(q_tokens & t_tokens) / float(len(q_tokens))
 
 
-def _extract_conditions_url(href: str) -> Optional[str]:
+def _extract_conditions_url(href: str) -> str | None:
     """
     NHS search results often use a /search/click?...&url=%2Fconditions%2F... link.
     This function normalises any href that ultimately points to a /conditions/... page.
@@ -56,7 +56,7 @@ def _extract_conditions_url(href: str) -> Optional[str]:
     return None
 
 
-def find_condition_urls(query: str, limit: int = 3) -> List[str]:
+def find_condition_urls(query: str, limit: int = 3) -> list[str]:
     try:
         url = SEARCH_URL.format(query=quote_plus(query))
         r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
@@ -65,7 +65,7 @@ def find_condition_urls(query: str, limit: int = 3) -> List[str]:
         return []
 
     soup = BeautifulSoup(r.text, "html.parser")
-    urls: List[str] = []
+    urls: list[str] = []
     q_tokens = set(_normalize(query))
 
     # Look at all links and extract those that ultimately point to /conditions/... pages.
@@ -88,7 +88,7 @@ def find_condition_urls(query: str, limit: int = 3) -> List[str]:
     return urls
 
 
-def scrape_condition_page(url: str) -> Optional[Dict[str, Any]]:
+def scrape_condition_page(url: str) -> dict[str, Any] | None:
     try:
         r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
         r.raise_for_status()
@@ -99,7 +99,7 @@ def scrape_condition_page(url: str) -> Optional[Dict[str, Any]]:
     title_el = soup.select_one("h1")
     main = soup.select_one("main") or soup
 
-    paragraphs: List[str] = []
+    paragraphs: list[str] = []
     for p in main.select("p"):
         text = p.get_text(" ", strip=True)
         if text:
@@ -119,20 +119,20 @@ def scrape_condition_page(url: str) -> Optional[Dict[str, Any]]:
     }
 
 
-def fetch_nhs_for_query(query: str) -> Optional[Dict[str, Any]]:
+def fetch_nhs_for_query(query: str) -> dict[str, Any] | None:
     urls = find_condition_urls(query, limit=1)
     if not urls:
         return None
     return scrape_condition_page(urls[0])
 
 
-def fetch_nhs_chunks_for_query(query: str, k: int = 10) -> List[Dict[str, Any]]:
+def fetch_nhs_chunks_for_query(query: str, k: int = 10) -> list[dict[str, Any]]:
     """
     Return up to k best-scoring NHS snippets (paragraphs) for a query.
     Each result looks like a normal search hit: {text, title, url, score, id, source, meta}.
     """
     urls = find_condition_urls(query, limit=5)
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
 
     for url in urls:
         article = scrape_condition_page(url)
@@ -140,7 +140,7 @@ def fetch_nhs_chunks_for_query(query: str, k: int = 10) -> List[Dict[str, Any]]:
             continue
 
         title = article.get("title", "")
-        paragraphs: List[str] = article.get("paragraphs", []) or []
+        paragraphs: list[str] = article.get("paragraphs", []) or []
 
         for idx, para in enumerate(paragraphs):
             if not para:

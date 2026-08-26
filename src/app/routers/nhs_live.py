@@ -1,9 +1,8 @@
-from typing import List
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ..scraper.nhs_live import fetch_nhs_for_query, fetch_nhs_chunks_for_query
+from ..scraper.nhs_live import fetch_nhs_chunks_for_query, fetch_nhs_for_query
 
 router = APIRouter(prefix="/v1/nhs", tags=["nhs"])
 
@@ -38,12 +37,12 @@ def nhs_live_post(payload: NHSQuery):
 # -------- SEARCH (paragraph chunks) --------
 
 @router.get("/search")
-def nhs_search_get(query: str, k: int = 10) -> List[dict]:
+def nhs_search_get(query: str, k: int = 10) -> list[dict]:
     results = fetch_nhs_chunks_for_query(query, k)
     return results
 
 
 @router.post("/search")
-def nhs_search_post(payload: NHSSearchQuery) -> List[dict]:
+def nhs_search_post(payload: NHSSearchQuery) -> list[dict]:
     results = fetch_nhs_chunks_for_query(payload.query, payload.k)
     return results

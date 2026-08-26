@@ -1,13 +1,18 @@
-import os, json, sys
+import json
+import os
+import sys
+
 os.environ["TRANSFORMERS_NO_TF"]="1"
 os.environ["USE_TF"]="0"
 os.environ["TRANSFORMERS_NO_TORCHVISION"]="1"
 
-import torch
 import platform
-from torch.utils.data import DataLoader, Dataset
-from sentence_transformers import SentenceTransformer, InputExample, losses
+
+import torch
+from sentence_transformers import InputExample, SentenceTransformer, losses
 from sentence_transformers.evaluation import InformationRetrievalEvaluator
+from torch.utils.data import DataLoader, Dataset
+
 
 class PairDS(Dataset):
     def __init__(self, path):
@@ -32,14 +37,19 @@ def build_ir_eval(path, sample=1000):
         rel[qid]={did:1}
     return InformationRetrievalEvaluator(queries, corpus, rel, name="pubmed_val")
 
-def main(train_path, val_path, out_dir, model_name, batch_size, epochs, lr, num_workers, eval_sample):
+def main(
+    train_path, val_path, out_dir, model_name,
+    batch_size, epochs, lr, num_workers, eval_sample,
+):
     if platform.system() == "Windows":
         num_workers = 0
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch.backends.cudnn.benchmark = True
-    try: torch.set_float32_matmul_precision("high")
-    except: pass
+    try:
+        torch.set_float32_matmul_precision("high")
+    except (AttributeError, RuntimeError):
+        pass
 
     train_ds = PairDS(train_path)
     train_dl = DataLoader(
@@ -47,7 +57,7 @@ def main(train_path, val_path, out_dir, model_name, batch_size, epochs, lr, num_
         shuffle=True,
         batch_size=batch_size,
         drop_last=True,
-        num_workers=num_workers,          # will be 0 on Windows
+        num_workers=num_workers,  # forced to 0 on Windows
         pin_memory=torch.cuda.is_available(),
         persistent_workers=False           # important with workers
     )
@@ -84,4 +94,7 @@ if __name__=="__main__":
     num_workers=int(os.getenv("NUM_WORKERS","2"))
     eval_sample=int(os.getenv("EVAL_SAMPLE","1000"))
     os.makedirs(out_dir, exist_ok=True)
-    main(train_path, val_path, out_dir, model_name, batch_size, epochs, lr, num_workers, eval_sample)
+    main(
+        train_path, val_path, out_dir, model_name,
+        batch_size, epochs, lr, num_workers, eval_sample,
+    )

@@ -22,15 +22,15 @@ env/
 
 # ---- Node ----
 node_modules/
-src/frontend/dist/
+/src/frontend/dist/
 
 # ---- Large artifacts (regenerate with scripts/) ----
-models/
-checkpoints/
-data/cache/
-data/processed/
-data/raw/
-data/scraped/
+/models/
+/checkpoints/
+/data/cache/
+/data/processed/
+/data/raw/
+/data/scraped/
 
 # ---- Databases ----
 *.db
@@ -38,7 +38,7 @@ data/scraped/
 *.sqlite3
 
 # ---- Logs ----
-logs/
+/logs/
 *.log
 
 # ---- Editors / OS ----
@@ -48,5 +48,5 @@ logs/
 Thumbs.db
 
 # ---- Junk ----
-folders.txt
-structure.txt
+/folders.txt
+/structure.txt

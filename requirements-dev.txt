@@ -1,0 +1,14 @@
+# Development and test dependencies.
+# Install: pip install -r requirements.txt -r requirements-dev.txt
+-r requirements.txt
+
+pytest==8.4.2
+pytest-cov==7.0.0
+httpx==0.28.1
+ruff==0.16.4
+
+# Data prep / evaluation
+pandas==2.3.3
+
+# Optional Streamlit debug UI (src/frontend/app.py)
+streamlit>=1.40

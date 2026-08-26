@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
+
 from ..models.rewrite_model import correct_text
 
 router = APIRouter()

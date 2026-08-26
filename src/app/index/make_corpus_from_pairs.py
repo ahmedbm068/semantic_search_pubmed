@@ -1,17 +1,19 @@
-import os, json, argparse
+import argparse
+import json
+import os
 
 KEYS_POS = ["positive","pos","passage","doc","document","text","body","abstract","content"]
 KEYS_NEG = ["negative","neg","hard_negative","hard_neg","difficult"]
 
 def iter_jsonl(path):
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+    with open(path, encoding="utf-8", errors="ignore") as f:
         for line in f:
             line=line.strip()
             if not line:
                 continue
             try:
                 yield json.loads(line)
-            except:
+            except json.JSONDecodeError:
                 continue
 
 def pick_first(d, keys):

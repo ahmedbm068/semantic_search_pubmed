@@ -1,22 +1,29 @@
-import os, sys, json, argparse, glob, time
-import numpy as np
-from tqdm import tqdm
-from sentence_transformers import SentenceTransformer
+import argparse
+import glob
+import json
+import os
+import sys
+import time
+
 import faiss
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from tqdm import tqdm
+
 
 def read_txt(path):
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+    with open(path, encoding="utf-8", errors="ignore") as f:
         for line in f:
             t = line.strip()
             if t:
                 yield t
 
 def read_jsonl(path):
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+    with open(path, encoding="utf-8", errors="ignore") as f:
         for line in f:
             try:
                 obj = json.loads(line)
-            except:
+            except json.JSONDecodeError:
                 continue
             for k in ["text","passage","content","abstract","document","body"]:
                 if k in obj and isinstance(obj[k], str) and obj[k].strip():
@@ -53,7 +60,13 @@ def main():
     batches = []
     for i in tqdm(range(0, len(texts), args.batch_size)):
         batch = texts[i:i+args.batch_size]
-        e = model.encode(batch, convert_to_numpy=True, batch_size=args.batch_size, show_progress_bar=False, normalize_embeddings=args.normalize)
+        e = model.encode(
+            batch,
+            convert_to_numpy=True,
+            batch_size=args.batch_size,
+            show_progress_bar=False,
+            normalize_embeddings=args.normalize,
+        )
         batches.append(e)
     X = np.concatenate(batches, axis=0)
 
@@ -75,7 +88,17 @@ def main():
         for i, t in enumerate(texts):
             f.write(json.dumps({"id": i, "text": t}, ensure_ascii=False) + "\n")
     with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump({"model_path": args.model_path, "dim": int(d), "size": int(len(texts)), "similarity": "cosine", "normalized": True, "created_at": int(time.time())}, f)
+        json.dump(
+            {
+                "model_path": args.model_path,
+                "dim": int(d),
+                "size": int(len(texts)),
+                "similarity": "cosine",
+                "normalized": True,
+                "created_at": int(time.time()),
+            },
+            f,
+        )
 
     print("saved", idx_path)
     print("saved", emb_path)

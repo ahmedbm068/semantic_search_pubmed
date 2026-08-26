@@ -1,4 +1,3 @@
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -19,11 +18,11 @@ from src.app.schemas.chat import (
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
-@router.get("/conversations", response_model=List[ConversationRead])
+@router.get("/conversations", response_model=list[ConversationRead])
 def list_conversations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> List[ConversationRead]:
+) -> list[ConversationRead]:
     conversations = (
         db.query(Conversation)
         .filter(Conversation.user_id == current_user.id)

@@ -1,26 +1,34 @@
-version: "3.9"
-
 services:
   backend:
     build: .
-    container_name: nlp_backend
+    container_name: pubmed_backend
     env_file:
       - .env
     environment:
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
+      # Container-internal hostnames override whatever .env holds for localhost.
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: sqlite:////app/data/app.db
+      EMBEDDING_MODEL: /app/models/biomed-miniLM
+      INDEX_PATH: /app/data/cache/faiss.index
+      CORPUS_JSONL_PATH: /app/data/cache/corpus.jsonl
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
     ports:
       - "8000:8000"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     volumes:
-      - ./src:/app/src
-      - ~/.cache/huggingface:/home/appuser/.cache/huggingface
+      # Index and model are build artifacts mounted read-write / read-only
+      # rather than baked into the image (see Dockerfile).
+      - ./data:/app/data
+      - ./models:/app/models:ro
+      - ./logs:/app/logs
+      - hf_cache:/home/appuser/.cache/huggingface
     restart: unless-stopped
 
   frontend:
     image: nginx:alpine
-    container_name: nlp_frontend
+    container_name: pubmed_frontend
     volumes:
       - ./src/frontend:/usr/share/nginx/html:ro
     ports:
@@ -31,21 +39,32 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: nlp_redis
+    container_name: pubmed_redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   tests:
     build: .
-    container_name: nlp_tests
+    container_name: pubmed_tests
     command: pytest -q
     env_file:
       - .env
     environment:
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      REDIS_URL: redis://redis:6379/0
     volumes:
       - ./src:/app/src
+      - ./tests:/app/tests
+      - ./data:/app/data
+      - ./models:/app/models:ro
     depends_on:
-      - backend
+      - redis
     profiles: ["ci"]
+
+volumes:
+  hf_cache:

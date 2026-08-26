@@ -1,6 +1,10 @@
-from pathlib import Path
-import logging, json, time, sys
+import json
+import logging
+import sys
+import time
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
+
 
 class JSONFormatter(logging.Formatter):
     def format(self, record):

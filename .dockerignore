@@ -3,14 +3,25 @@ __pycache__/
 *.pyo
 *.pyd
 .venv/
+.venv311/
 venv/
 .env
-.git
+.env.*
+.git/
 .gitignore
 dist/
 build/
 *.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Large artifacts are mounted as volumes at runtime, not copied into the image.
 data/
-cache/
+models/
+checkpoints/
 logs/
+cache/
+
+# Frontend build tooling
+src/frontend/node_modules/
 .DS_Store

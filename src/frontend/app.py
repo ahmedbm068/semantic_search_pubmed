@@ -1,4 +1,8 @@
-import os, requests, re, json, time
+import os
+import re
+import time
+
+import requests
 import streamlit as st
 
 st.set_page_config(page_title="Semantic Search", page_icon="🔎", layout="wide")
@@ -56,8 +60,7 @@ if do and q.strip():
                 score = h.get("score") or h.get("similarity") or h.get("distance") or 0.0
                 meta = h.get("meta") or {}
 
-                # 👉 fake-boosted display score (+0.3)
-                display_score = float(score) + 0.3
+                display_score = float(score)
 
                 col1, col2 = st.columns([1, 5])
                 with col1:

@@ -1,16 +1,12 @@
-from pathlib import Path
-import os
-
-from .session import engine, DATABASE_URL
 from src.app.db.base import Base
-from src.app.models import *  # noqa: F401,F403
+from src.app.db.session import engine
+from src.app.models import *  # noqa: F401,F403  (registers mappers on Base.metadata)
 
 
-async def ensure_core_tables():
-    if DATABASE_URL.startswith("sqlite:///"):
-        db_path = DATABASE_URL.replace("sqlite:///", "")
-        db_dir = os.path.dirname(db_path)
-        if db_dir:
-            Path(db_dir).mkdir(parents=True, exist_ok=True)
+async def ensure_core_tables() -> None:
+    """Create any missing tables.
 
+    Fine for dev/SQLite. For schema *changes* on a real database, use Alembic --
+    create_all never alters an existing table.
+    """
     Base.metadata.create_all(bind=engine)
