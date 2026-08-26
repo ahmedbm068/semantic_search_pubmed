@@ -6,6 +6,9 @@ requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Bare `pytest` does not put the CWD on sys.path the way `python -m pytest`
+# does, so `import src.app...` fails in CI without this.
+pythonpath = ["."]
 addopts = "-q --strict-markers"
 filterwarnings = [
     "ignore::DeprecationWarning",
